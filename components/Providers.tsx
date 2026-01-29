@@ -5,10 +5,15 @@
 
 'use client';
 
+import React from 'react';
 import { PrivyProvider } from '@privy-io/react-auth';
 import { PRIVY_APP_ID, PRIVY_CLIENT_ID, privyConfig } from '@/lib/privy-config';
 
-export default function Providers({ children }: { children: React.ReactNode }) {
+interface ProvidersProps {
+    children: React.ReactNode;
+}
+
+export default function Providers({ children }: ProvidersProps) {
     return (
         <PrivyProvider
             appId={PRIVY_APP_ID}
