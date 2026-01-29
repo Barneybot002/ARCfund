@@ -192,9 +192,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                         projectTitle={project.title}
                         hasAccess={hasAccess}
                         onRequestAccess={handleRequestAccess}
-                    >
-                        {/* Content is guarded */}
-                    </PrivateGuard>
+                    />
                 )}
             </div>
         </div>

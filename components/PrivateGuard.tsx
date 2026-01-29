@@ -17,7 +17,7 @@ interface PrivateGuardProps {
     projectTitle: string;
     hasAccess: boolean;
     onRequestAccess?: () => void;
-    children: React.ReactNode;
+    children?: React.ReactNode;
 }
 
 export default function PrivateGuard({
