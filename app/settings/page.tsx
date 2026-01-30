@@ -22,6 +22,9 @@ export default function SettingsPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+    // Track if role changed (for reload)
+    const [originalRole, setOriginalRole] = useState<UserRole>('investor');
+
     useEffect(() => {
         if (!ready) return;
 
@@ -35,11 +38,12 @@ export default function SettingsPage() {
             setUserProfile(profile);
             setName(profile.name);
             setRole(profile.role);
+            setOriginalRole(profile.role);
         }
         setIsLoading(false);
     }, [ready, authenticated, router]);
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!name.trim()) {
             setSaveMessage({ type: 'error', text: 'Please enter your name' });
             return;
@@ -52,10 +56,23 @@ export default function SettingsPage() {
             const updated = updateUserProfile({ name: name.trim(), role });
             if (updated) {
                 setUserProfile(updated);
-                setSaveMessage({ type: 'success', text: 'Settings saved successfully!' });
 
-                // Clear message after 3 seconds
-                setTimeout(() => setSaveMessage(null), 3000);
+                // Check if role changed
+                const roleChanged = originalRole !== role;
+
+                if (roleChanged) {
+                    setSaveMessage({ type: 'success', text: 'Role changed! Redirecting to dashboard...' });
+
+                    // Wait a moment then reload the page to update all components
+                    setTimeout(() => {
+                        window.location.href = '/dashboard';
+                    }, 1000);
+                } else {
+                    setSaveMessage({ type: 'success', text: 'Settings saved successfully!' });
+
+                    // Clear message after 3 seconds
+                    setTimeout(() => setSaveMessage(null), 3000);
+                }
             }
         } catch {
             setSaveMessage({ type: 'error', text: 'Failed to save settings' });
@@ -85,6 +102,8 @@ export default function SettingsPage() {
         month: 'long',
         year: 'numeric'
     });
+
+    const roleChanged = originalRole !== role;
 
     return (
         <div className="min-h-screen py-20 px-4 sm:px-6 lg:px-8">
@@ -155,8 +174,8 @@ export default function SettingsPage() {
                                     type="button"
                                     onClick={() => setRole('founder')}
                                     className={`p-4 rounded-xl border-2 transition-all duration-300 text-left ${role === 'founder'
-                                            ? 'border-purple-500 bg-purple-500/15'
-                                            : 'border-gray-700/50 hover:border-gray-600 bg-gray-800/40'
+                                        ? 'border-purple-500 bg-purple-500/15'
+                                        : 'border-gray-700/50 hover:border-gray-600 bg-gray-800/40'
                                         }`}
                                 >
                                     <div className="flex items-center gap-3">
@@ -174,8 +193,8 @@ export default function SettingsPage() {
                                     type="button"
                                     onClick={() => setRole('investor')}
                                     className={`p-4 rounded-xl border-2 transition-all duration-300 text-left ${role === 'investor'
-                                            ? 'border-violet-500 bg-violet-500/15'
-                                            : 'border-gray-700/50 hover:border-gray-600 bg-gray-800/40'
+                                        ? 'border-violet-500 bg-violet-500/15'
+                                        : 'border-gray-700/50 hover:border-gray-600 bg-gray-800/40'
                                         }`}
                                 >
                                     <div className="flex items-center gap-3">
@@ -189,9 +208,20 @@ export default function SettingsPage() {
                                     </div>
                                 </button>
                             </div>
-                            <p className="text-xs text-gray-500 mt-3">
-                                💡 Changing your role will update your dashboard and navigation
-                            </p>
+                            {roleChanged && (
+                                <motion.p
+                                    initial={{ opacity: 0, y: -5 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="text-xs text-amber-400 mt-3 flex items-center gap-1"
+                                >
+                                    ⚠️ Role change will reload the page to update navigation and dashboard
+                                </motion.p>
+                            )}
+                            {!roleChanged && (
+                                <p className="text-xs text-gray-500 mt-3">
+                                    💡 Changing your role will update your dashboard and navigation
+                                </p>
+                            )}
                         </div>
 
                         {/* Member Since */}
@@ -229,7 +259,7 @@ export default function SettingsPage() {
                         disabled={isSaving}
                         className="ml-auto px-8 py-3 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 rounded-xl font-bold transition-all hover:scale-[1.02] hover:shadow-lg hover:shadow-purple-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {isSaving ? 'Saving...' : 'Save Changes'}
+                        {isSaving ? 'Saving...' : roleChanged ? 'Save & Reload' : 'Save Changes'}
                     </button>
                 </motion.div>
             </div>

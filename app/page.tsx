@@ -16,7 +16,7 @@ import HowItWorks from '@/components/home/HowItWorks';
 import WhyArcium from '@/components/home/WhyArcium';
 import FeaturedPreview from '@/components/home/FeaturedPreview';
 import Testimonials from '@/components/home/Testimonials';
-import { getUserProfile, UserProfile } from '@/lib/user-storage';
+import { getUserProfile, onProfileChange, UserProfile } from '@/lib/user-storage';
 import { float } from '@/lib/animations';
 
 export default function HomePage() {
@@ -28,23 +28,35 @@ export default function HomePage() {
     const [mounted, setMounted] = useState(false);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
+    // Load profile on mount and listen for changes
     useEffect(() => {
         setMounted(true);
+
+        // Initial load
+        const profile = getUserProfile();
+        setUserProfile(profile);
+
+        // Listen for profile changes (from profile setup modal or settings page)
+        const unsubscribe = onProfileChange((newProfile) => {
+            setUserProfile(newProfile);
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    // Also reload profile when authentication changes
+    useEffect(() => {
         if (authenticated) {
             const profile = getUserProfile();
             setUserProfile(profile);
+        } else {
+            setUserProfile(null);
         }
     }, [authenticated]);
 
-    // Don't hide the entire page during mounting - it causes the button to disappear
-    // Instead, we handle the button state separately in renderHeroButton
-
     // Determine CTA button based on auth state
-    // IMPORTANT: Default to showing Connect Wallet button
-    // Only show role-specific buttons when authenticated AND have userProfile
     const renderHeroButton = () => {
         // If Privy not ready yet, still show Connect Wallet (it will work once ready)
-        // This ensures the button is always visible
         if (!ready) {
             return (
                 <motion.button
@@ -151,12 +163,12 @@ export default function HomePage() {
 
                 {/* Hero Content */}
                 <div className="max-w-7xl mx-auto text-center relative z-10">
-                    {/* Arcium Badge - Floating */}
+                    {/* Arcium Badge - Floating, positioned higher */}
                     <motion.div
                         variants={float}
                         initial="initial"
                         animate="animate"
-                        className="flex justify-center mb-8"
+                        className="flex justify-center mb-8 -mt-16 sm:-mt-20 lg:-mt-24"
                     >
                         <ArciumBadge />
                     </motion.div>
@@ -206,7 +218,7 @@ export default function HomePage() {
                         {renderHeroButton()}
                     </motion.div>
 
-                    {/* Scroll Indicator */}
+                    {/* Scroll Indicator - just a simple chevron, no arrow */}
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -219,7 +231,7 @@ export default function HomePage() {
                             className="text-gray-500"
                         >
                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                             </svg>
                         </motion.div>
                     </motion.div>

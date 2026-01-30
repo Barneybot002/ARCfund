@@ -12,7 +12,7 @@ import { usePrivy } from '@privy-io/react-auth';
 import ArciumBadge from './ArciumBadge';
 import ProfileSetupModal from './ProfileSetupModal';
 import { slideDown } from '@/lib/animations';
-import { getUserProfile, hasCompletedProfile, clearUserProfile, UserProfile, UserRole } from '@/lib/user-storage';
+import { getUserProfile, hasCompletedProfile, clearUserProfile, onProfileChange, UserProfile, UserRole } from '@/lib/user-storage';
 
 export default function Header() {
     const pathname = usePathname();
@@ -40,6 +40,14 @@ export default function Header() {
             setShowProfileModal(false);
         }
     }, [authenticated, user?.wallet?.address]);
+
+    // Listen for profile changes (from settings page or profile setup modal)
+    useEffect(() => {
+        const unsubscribe = onProfileChange((newProfile) => {
+            setUserProfile(newProfile);
+        });
+        return () => unsubscribe();
+    }, []);
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -154,10 +162,10 @@ export default function Header() {
                                     key={link.href}
                                     href={link.href}
                                     className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${isActivePath(link.href)
-                                            ? 'bg-purple-500/20 text-purple-300'
-                                            : 'highlight' in link && link.highlight
-                                                ? 'text-purple-400 hover:text-purple-300 hover:bg-purple-500/10'
-                                                : 'text-gray-300 hover:text-white hover:bg-gray-800/50'
+                                        ? 'bg-purple-500/20 text-purple-300'
+                                        : 'highlight' in link && link.highlight
+                                            ? 'text-purple-400 hover:text-purple-300 hover:bg-purple-500/10'
+                                            : 'text-gray-300 hover:text-white hover:bg-gray-800/50'
                                         }`}
                                 >
                                     {link.label}
@@ -172,114 +180,126 @@ export default function Header() {
                                 <ArciumBadge showSubtext={false} />
                             </div>
 
-                            {/* User Profile or Connect Button */}
-                            {ready && (
-                                authenticated && userProfile ? (
-                                    <div className="relative" ref={dropdownRef}>
-                                        {/* Profile Button */}
-                                        <button
-                                            onClick={() => setDropdownOpen(!dropdownOpen)}
-                                            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-800/60 border border-gray-700/50 hover:border-purple-500/50 hover:bg-gray-800 transition-all duration-300"
-                                        >
-                                            {/* Avatar */}
-                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shadow-inner ${userProfile.role === 'founder'
-                                                    ? 'bg-gradient-to-br from-purple-500 to-purple-700'
-                                                    : 'bg-gradient-to-br from-violet-500 to-indigo-700'
-                                                }`}>
-                                                {getInitials()}
-                                            </div>
+                            {/* Connect Wallet Button - Always visible on homepage */}
+                            {ready && !authenticated && (
+                                <button
+                                    onClick={handleConnectWallet}
+                                    disabled={!ready}
+                                    className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 rounded-xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/30 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Connect Wallet
+                                </button>
+                            )}
 
-                                            {/* Name */}
-                                            <span className="hidden sm:block text-sm font-medium text-white max-w-[100px] truncate">
-                                                {getDisplayName()}
-                                            </span>
-
-                                            {/* Dropdown Arrow */}
-                                            <svg
-                                                className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`}
-                                                fill="none"
-                                                viewBox="0 0 24 24"
-                                                stroke="currentColor"
-                                            >
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                            </svg>
-                                        </button>
-
-                                        {/* Dropdown Menu */}
-                                        <AnimatePresence>
-                                            {dropdownOpen && (
-                                                <motion.div
-                                                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                                                    transition={{ duration: 0.15 }}
-                                                    className="absolute right-0 mt-2 w-56 bg-gray-900 border border-gray-700 rounded-xl shadow-xl overflow-hidden"
-                                                >
-                                                    {/* User info header */}
-                                                    <div className="px-4 py-3 border-b border-gray-800 bg-gray-800/50">
-                                                        <p className="text-sm font-semibold text-white">{userProfile.name}</p>
-                                                        <p className="text-xs text-gray-400 truncate mt-0.5">
-                                                            {user?.wallet?.address?.slice(0, 10)}...{user?.wallet?.address?.slice(-6)}
-                                                        </p>
-                                                        <span className={`inline-flex items-center gap-1 mt-2 px-2 py-0.5 text-xs rounded-full font-medium ${userProfile.role === 'founder'
-                                                                ? 'bg-purple-500/20 text-purple-300'
-                                                                : 'bg-violet-500/20 text-violet-300'
-                                                            }`}>
-                                                            {userProfile.role === 'founder' ? '🚀 Founder' : '💰 Investor'}
-                                                        </span>
-                                                    </div>
-
-                                                    {/* Menu items */}
-                                                    <div className="py-1">
-                                                        <Link
-                                                            href="/dashboard"
-                                                            onClick={() => setDropdownOpen(false)}
-                                                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
-                                                        >
-                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                                                            </svg>
-                                                            Dashboard
-                                                        </Link>
-
-                                                        <Link
-                                                            href="/settings"
-                                                            onClick={() => setDropdownOpen(false)}
-                                                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
-                                                        >
-                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                            </svg>
-                                                            Settings
-                                                        </Link>
-                                                    </div>
-
-                                                    {/* Disconnect */}
-                                                    <div className="border-t border-gray-800 py-1">
-                                                        <button
-                                                            onClick={handleDisconnect}
-                                                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-gray-800 transition-colors"
-                                                        >
-                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                                                            </svg>
-                                                            Disconnect
-                                                        </button>
-                                                    </div>
-                                                </motion.div>
-                                            )}
-                                        </AnimatePresence>
-                                    </div>
-                                ) : (
+                            {/* User Profile Dropdown - Shown when authenticated */}
+                            {ready && authenticated && userProfile && (
+                                <div className="relative" ref={dropdownRef}>
+                                    {/* Profile Button */}
                                     <button
-                                        onClick={handleConnectWallet}
-                                        disabled={!ready}
-                                        className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 rounded-xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/30 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                                        onClick={() => setDropdownOpen(!dropdownOpen)}
+                                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-800/60 border border-gray-700/50 hover:border-purple-500/50 hover:bg-gray-800 transition-all duration-300"
                                     >
-                                        {!ready ? 'Loading...' : 'Connect Wallet'}
+                                        {/* Avatar */}
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shadow-inner ${userProfile.role === 'founder'
+                                            ? 'bg-gradient-to-br from-purple-500 to-purple-700'
+                                            : 'bg-gradient-to-br from-violet-500 to-indigo-700'
+                                            }`}>
+                                            {getInitials()}
+                                        </div>
+
+                                        {/* Name */}
+                                        <span className="hidden sm:block text-sm font-medium text-white max-w-[100px] truncate">
+                                            {getDisplayName()}
+                                        </span>
+
+                                        {/* Dropdown Arrow */}
+                                        <svg
+                                            className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`}
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                        </svg>
                                     </button>
-                                )
+
+                                    {/* Dropdown Menu */}
+                                    <AnimatePresence>
+                                        {dropdownOpen && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                                                transition={{ duration: 0.15 }}
+                                                className="absolute right-0 mt-2 w-56 bg-gray-900 border border-gray-700 rounded-xl shadow-xl overflow-hidden"
+                                            >
+                                                {/* User info header */}
+                                                <div className="px-4 py-3 border-b border-gray-800 bg-gray-800/50">
+                                                    <p className="text-sm font-semibold text-white">{userProfile.name}</p>
+                                                    <p className="text-xs text-gray-400 truncate mt-0.5">
+                                                        {user?.wallet?.address?.slice(0, 10)}...{user?.wallet?.address?.slice(-6)}
+                                                    </p>
+                                                    <span className={`inline-flex items-center gap-1 mt-2 px-2 py-0.5 text-xs rounded-full font-medium ${userProfile.role === 'founder'
+                                                        ? 'bg-purple-500/20 text-purple-300'
+                                                        : 'bg-violet-500/20 text-violet-300'
+                                                        }`}>
+                                                        {userProfile.role === 'founder' ? '🚀 Founder' : '💰 Investor'}
+                                                    </span>
+                                                </div>
+
+                                                {/* Menu items */}
+                                                <div className="py-1">
+                                                    <Link
+                                                        href="/dashboard"
+                                                        onClick={() => setDropdownOpen(false)}
+                                                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                                                        </svg>
+                                                        Dashboard
+                                                    </Link>
+
+                                                    <Link
+                                                        href="/settings"
+                                                        onClick={() => setDropdownOpen(false)}
+                                                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                        </svg>
+                                                        Settings
+                                                    </Link>
+                                                </div>
+
+                                                {/* Disconnect */}
+                                                <div className="border-t border-gray-800 py-1">
+                                                    <button
+                                                        onClick={handleDisconnect}
+                                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-gray-800 transition-colors"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                                        </svg>
+                                                        Disconnect
+                                                    </button>
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+                            )}
+
+                            {/* Show Connect Wallet when authenticated but no profile yet */}
+                            {ready && authenticated && !userProfile && (
+                                <button
+                                    onClick={handleConnectWallet}
+                                    disabled={!ready}
+                                    className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 rounded-xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/30 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Connect Wallet
+                                </button>
                             )}
 
                             {/* Mobile menu button */}
@@ -328,10 +348,10 @@ export default function Header() {
                                             key={link.href}
                                             href={link.href}
                                             className={`block px-4 py-2.5 rounded-lg font-medium transition-colors ${isActivePath(link.href)
-                                                    ? 'bg-purple-500/20 text-purple-300'
-                                                    : 'highlight' in link && link.highlight
-                                                        ? 'text-purple-400'
-                                                        : 'text-gray-300 hover:text-white hover:bg-gray-800/50'
+                                                ? 'bg-purple-500/20 text-purple-300'
+                                                : 'highlight' in link && link.highlight
+                                                    ? 'text-purple-400'
+                                                    : 'text-gray-300 hover:text-white hover:bg-gray-800/50'
                                                 }`}
                                         >
                                             {link.label}

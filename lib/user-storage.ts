@@ -14,6 +14,7 @@ export interface UserProfile {
 }
 
 const STORAGE_KEY = 'arcfund_user_profile';
+const PROFILE_CHANGE_EVENT = 'arcfund_profile_change';
 
 /**
  * Get user profile from localStorage
@@ -45,6 +46,12 @@ export function saveUserProfile(profile: Omit<UserProfile, 'createdAt' | 'update
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(fullProfile));
+
+    // Dispatch custom event so other components can react to profile changes
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(PROFILE_CHANGE_EVENT, { detail: fullProfile }));
+    }
+
     return fullProfile;
 }
 
@@ -62,7 +69,21 @@ export function updateUserProfile(updates: Partial<Omit<UserProfile, 'createdAt'
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProfile));
+
+    // Dispatch custom event so other components can react to profile changes
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(PROFILE_CHANGE_EVENT, { detail: updatedProfile }));
+    }
+
     return updatedProfile;
+}
+
+/**
+ * Update user role specifically with page reload for full UI refresh
+ */
+export function updateUserRole(newRole: UserRole): UserProfile | null {
+    const updated = updateUserProfile({ role: newRole });
+    return updated;
 }
 
 /**
@@ -71,6 +92,9 @@ export function updateUserProfile(updates: Partial<Omit<UserProfile, 'createdAt'
 export function clearUserProfile(): void {
     if (typeof window === 'undefined') return;
     localStorage.removeItem(STORAGE_KEY);
+
+    // Dispatch custom event
+    window.dispatchEvent(new CustomEvent(PROFILE_CHANGE_EVENT, { detail: null }));
 }
 
 /**
@@ -103,3 +127,23 @@ export function isInvestor(): boolean {
     const profile = getUserProfile();
     return profile?.role === 'investor';
 }
+
+/**
+ * Subscribe to profile changes
+ */
+export function onProfileChange(callback: (profile: UserProfile | null) => void): () => void {
+    if (typeof window === 'undefined') return () => { };
+
+    const handler = (event: Event) => {
+        const customEvent = event as CustomEvent<UserProfile | null>;
+        callback(customEvent.detail);
+    };
+
+    window.addEventListener(PROFILE_CHANGE_EVENT, handler);
+    return () => window.removeEventListener(PROFILE_CHANGE_EVENT, handler);
+}
+
+/**
+ * Event name for profile changes (for external use)
+ */
+export const PROFILE_CHANGE_EVENT_NAME = PROFILE_CHANGE_EVENT;
