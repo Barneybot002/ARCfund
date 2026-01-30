@@ -36,19 +36,16 @@ export default function HomePage() {
         }
     }, [authenticated]);
 
-    if (!mounted) return null;
+    // Don't hide the entire page during mounting - it causes the button to disappear
+    // Instead, we handle the button state separately in renderHeroButton
 
     // Determine CTA button based on auth state
+    // IMPORTANT: Default to showing Connect Wallet button
+    // Only show role-specific buttons when authenticated AND have userProfile
     const renderHeroButton = () => {
+        // If Privy not ready yet, still show Connect Wallet (it will work once ready)
+        // This ensures the button is always visible
         if (!ready) {
-            return (
-                <div className="px-10 py-5 bg-gray-700/50 rounded-xl font-semibold text-xl animate-pulse">
-                    Loading...
-                </div>
-            );
-        }
-
-        if (!authenticated || !userProfile) {
             return (
                 <motion.button
                     onClick={() => login()}
@@ -61,6 +58,35 @@ export default function HomePage() {
             );
         }
 
+        // Not authenticated - show Connect Wallet
+        if (!authenticated) {
+            return (
+                <motion.button
+                    onClick={() => login()}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="px-10 py-5 bg-gradient-to-r from-purple-600 to-violet-600 rounded-xl font-bold text-xl shadow-2xl shadow-purple-500/40 hover:shadow-purple-500/60 transition-all"
+                >
+                    Connect Wallet
+                </motion.button>
+            );
+        }
+
+        // Authenticated but no profile yet - show Connect Wallet (profile setup will trigger)
+        if (!userProfile) {
+            return (
+                <motion.button
+                    onClick={() => login()}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="px-10 py-5 bg-gradient-to-r from-purple-600 to-violet-600 rounded-xl font-bold text-xl shadow-2xl shadow-purple-500/40 hover:shadow-purple-500/60 transition-all"
+                >
+                    Connect Wallet
+                </motion.button>
+            );
+        }
+
+        // Authenticated with profile - show role-specific button
         if (userProfile.role === 'investor') {
             return (
                 <Link href="/browse">
