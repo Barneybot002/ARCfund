@@ -1,6 +1,6 @@
 /**
  * Homepage - ARCfund Landing Page
- * Features: Hero with parallax, Arcium branding, stats, how it works, and info sections
+ * Features: Dynamic hero, trust bar, stats, how it works, why Arcium, featured preview, testimonials
  */
 
 'use client';
@@ -8,29 +8,105 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, useScroll, useTransform } from 'framer-motion';
+import { usePrivy } from '@privy-io/react-auth';
 import ArciumBadge from '@/components/ArciumBadge';
-import ArciumInfoSection from '@/components/ArciumInfoSection';
-import ProjectCard from '@/components/ProjectCard';
-import { dummyProjects } from '@/lib/dummy-data';
-import { slideUp, staggerContainer, staggerItem, float } from '@/lib/animations';
+import TrustBar from '@/components/home/TrustBar';
+import StatsSection from '@/components/home/StatsSection';
+import HowItWorks from '@/components/home/HowItWorks';
+import WhyArcium from '@/components/home/WhyArcium';
+import FeaturedPreview from '@/components/home/FeaturedPreview';
+import Testimonials from '@/components/home/Testimonials';
+import { getUserProfile, UserProfile } from '@/lib/user-storage';
+import { float } from '@/lib/animations';
 
 export default function HomePage() {
     const { scrollY } = useScroll();
     const y1 = useTransform(scrollY, [0, 500], [0, -150]);
     const y2 = useTransform(scrollY, [0, 500], [0, -75]);
 
+    const { ready, authenticated, login } = usePrivy();
     const [mounted, setMounted] = useState(false);
+    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
     useEffect(() => {
         setMounted(true);
-    }, []);
+        if (authenticated) {
+            const profile = getUserProfile();
+            setUserProfile(profile);
+        }
+    }, [authenticated]);
 
     if (!mounted) return null;
 
+    // Determine CTA button based on auth state
+    const renderHeroButton = () => {
+        if (!ready) {
+            return (
+                <div className="px-10 py-5 bg-gray-700/50 rounded-xl font-semibold text-xl animate-pulse">
+                    Loading...
+                </div>
+            );
+        }
+
+        if (!authenticated || !userProfile) {
+            return (
+                <motion.button
+                    onClick={() => login()}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="px-10 py-5 bg-gradient-to-r from-purple-600 to-violet-600 rounded-xl font-bold text-xl shadow-2xl shadow-purple-500/40 hover:shadow-purple-500/60 transition-all"
+                >
+                    Connect Wallet
+                </motion.button>
+            );
+        }
+
+        if (userProfile.role === 'investor') {
+            return (
+                <Link href="/browse">
+                    <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="px-10 py-5 bg-gradient-to-r from-violet-600 to-purple-600 rounded-xl font-bold text-xl shadow-2xl shadow-violet-500/40 hover:shadow-violet-500/60 transition-all"
+                    >
+                        Browse Projects
+                    </motion.button>
+                </Link>
+            );
+        }
+
+        // Founder
+        return (
+            <Link href="/create">
+                <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="px-10 py-5 bg-gradient-to-r from-purple-600 to-violet-600 rounded-xl font-bold text-xl shadow-2xl shadow-purple-500/40 hover:shadow-purple-500/60 transition-all"
+                >
+                    Create Private Pitch
+                </motion.button>
+            </Link>
+        );
+    };
+
+    // Dynamic subtitle based on user state
+    const getHeroSubtitle = () => {
+        if (!authenticated || !userProfile) {
+            return 'Powered by Arcium MXE - Encrypt your pitch, protect your vision, and raise funds with complete privacy';
+        }
+        if (userProfile.role === 'investor') {
+            return 'Discover innovative projects seeking funding with verified security and privacy';
+        }
+        return 'Start raising funds with encrypted pitches and complete privacy protection';
+    };
+
     return (
         <div className="overflow-hidden">
+            {/* Trust Indicators Bar */}
+            <TrustBar />
+
             {/* Hero Section with Parallax */}
-            <section className="relative min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 overflow-hidden">
+            <section className="relative min-h-[90vh] flex items-center justify-center px-4 sm:px-6 lg:px-8 overflow-hidden">
                 {/* Parallax Background Elements */}
                 <motion.div
                     style={{ y: y1 }}
@@ -91,34 +167,17 @@ export default function HomePage() {
                         transition={{ duration: 0.8, delay: 0.6 }}
                         className="text-lg sm:text-xl text-gray-400 mb-12 max-w-3xl mx-auto"
                     >
-                        Powered by Arcium MXE - Encrypt your pitch, protect your vision, and raise funds with complete privacy
+                        {getHeroSubtitle()}
                     </motion.p>
 
-                    {/* CTA Buttons */}
+                    {/* Dynamic CTA Button */}
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.8, delay: 0.8 }}
-                        className="flex flex-col sm:flex-row gap-4 justify-center items-center"
+                        className="flex justify-center"
                     >
-                        <Link href="/browse">
-                            <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                className="px-8 py-4 bg-gradient-to-r from-purple-600 to-violet-600 rounded-lg font-semibold text-lg shadow-lg shadow-purple-500/50 hover:shadow-purple-500/70 transition-shadow"
-                            >
-                                Browse Projects
-                            </motion.button>
-                        </Link>
-                        <Link href="/create">
-                            <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                className="px-8 py-4 bg-gray-800 border-2 border-purple-500/50 rounded-lg font-semibold text-lg hover:bg-gray-700 transition-colors"
-                            >
-                                Create Private Pitch
-                            </motion.button>
-                        </Link>
+                        {renderHeroButton()}
                     </motion.div>
 
                     {/* Scroll Indicator */}
@@ -141,171 +200,56 @@ export default function HomePage() {
                 </div>
             </section>
 
-            {/* Stats Section */}
-            <motion.section
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true, margin: '-100px' }}
-                variants={staggerContainer}
-                className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-transparent to-purple-900/10"
-            >
-                <div className="max-w-6xl mx-auto">
-                    <div className="grid md:grid-cols-3 gap-8">
-                        <motion.div variants={staggerItem} className="text-center">
-                            <div className="text-5xl font-bold bg-gradient-to-r from-purple-400 to-violet-400 bg-clip-text text-transparent mb-3">
-                                100%
-                            </div>
-                            <div className="text-xl text-gray-300 font-semibold mb-2">Private</div>
-                            <div className="text-gray-500">End-to-end encryption</div>
-                        </motion.div>
-
-                        <motion.div variants={staggerItem} className="text-center">
-                            <div className="text-5xl font-bold bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent mb-3">
-                                MPC
-                            </div>
-                            <div className="text-xl text-gray-300 font-semibold mb-2">Powered by MPC</div>
-                            <div className="text-gray-500">Multi-party computation</div>
-                        </motion.div>
-
-                        <motion.div variants={staggerItem} className="text-center">
-                            <div className="text-5xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent mb-3">
-                                Solana
-                            </div>
-                            <div className="text-xl text-gray-300 font-semibold mb-2">Built on Solana</div>
-                            <div className="text-gray-500">Fast & reliable</div>
-                        </motion.div>
-                    </div>
-                </div>
-            </motion.section>
+            {/* Animated Stats Section */}
+            <StatsSection />
 
             {/* How It Works Section */}
-            <motion.section
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true, margin: '-100px' }}
-                variants={staggerContainer}
-                className="py-20 px-4 sm:px-6 lg:px-8"
-            >
-                <div className="max-w-6xl mx-auto">
-                    <motion.div variants={staggerItem} className="text-center mb-16">
-                        <h2 className="text-4xl md:text-5xl font-bold mb-4">
-                            <span className="bg-gradient-to-r from-purple-400 to-violet-400 bg-clip-text text-transparent">
-                                How It Works
-                            </span>
-                        </h2>
-                        <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-                            Fundraising reimagined with confidential computing technology
-                        </p>
-                    </motion.div>
+            <HowItWorks />
 
-                    <div className="grid md:grid-cols-3 gap-8">
-                        {/* Step 1 */}
-                        <motion.div
-                            variants={staggerItem}
-                            className="relative p-8 bg-gray-800/50 rounded-2xl border border-purple-500/20 backdrop-blur-sm hover:border-purple-500/40 transition-colors group"
-                        >
-                            <div className="absolute -top-4 -left-4 w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center text-2xl font-bold shadow-lg">
-                                1
-                            </div>
-                            <div className="mb-6">
-                                <svg className="w-16 h-16 text-purple-400 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                </svg>
-                            </div>
-                            <h3 className="text-2xl font-bold mb-4 text-white">Create Private Pitch</h3>
-                            <p className="text-gray-400">
-                                Founders create project pitches and choose to encrypt them with Arcium MXE for complete privacy.
-                            </p>
-                        </motion.div>
+            {/* Why Arcium / Privacy Section */}
+            <WhyArcium />
 
-                        {/* Step 2 */}
-                        <motion.div
-                            variants={staggerItem}
-                            className="relative p-8 bg-gray-800/50 rounded-2xl border border-purple-500/20 backdrop-blur-sm hover:border-purple-500/40 transition-colors group"
-                        >
-                            <div className="absolute -top-4 -left-4 w-12 h-12 bg-violet-600 rounded-full flex items-center justify-center text-2xl font-bold shadow-lg">
-                                2
-                            </div>
-                            <div className="mb-6">
-                                <svg className="w-16 h-16 text-violet-400 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                                </svg>
-                            </div>
-                            <h3 className="text-2xl font-bold mb-4 text-white">Investors Request Access</h3>
-                            <p className="text-gray-400">
-                                Interested investors browse projects and request access to view encrypted pitches from founders.
-                            </p>
-                        </motion.div>
+            {/* Featured Projects Preview (only for non-authenticated users) */}
+            <FeaturedPreview />
 
-                        {/* Step 3 */}
-                        <motion.div
-                            variants={staggerItem}
-                            className="relative p-8 bg-gray-800/50 rounded-2xl border border-purple-500/20 backdrop-blur-sm hover:border-purple-500/40 transition-colors group"
-                        >
-                            <div className="absolute -top-4 -left-4 w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center text-2xl font-bold shadow-lg">
-                                3
-                            </div>
-                            <div className="mb-6">
-                                <svg className="w-16 h-16 text-indigo-400 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            </div>
-                            <h3 className="text-2xl font-bold mb-4 text-white">Smart Contract Escrow</h3>
-                            <p className="text-gray-400">
-                                Investments are secured in smart contracts with privacy guarantees powered by Arcium&aposs MPC technology.
-                            </p>
-                        </motion.div>
-                    </div>
-                </div>
-            </motion.section>
+            {/* Testimonials */}
+            <Testimonials />
 
-            {/* Arcium Technology Showcase */}
-            <ArciumInfoSection />
+            {/* Final CTA Section */}
+            <section className="py-24 px-4 relative overflow-hidden">
+                {/* Background gradient */}
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-900/20 to-transparent" />
 
-            {/* Featured Projects */}
-            <motion.section
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true, margin: '-100px' }}
-                variants={staggerContainer}
-                className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-transparent to-purple-900/10"
-            >
-                <div className="max-w-7xl mx-auto">
-                    <motion.div variants={staggerItem} className="text-center mb-12">
-                        <h2 className="text-4xl md:text-5xl font-bold mb-4">
-                            <span className="bg-gradient-to-r from-purple-400 to-violet-400 bg-clip-text text-transparent">
-                                Featured Projects
-                            </span>
-                        </h2>
-                        <p className="text-xl text-gray-400">
-                            Discover innovative projects seeking funding
-                        </p>
-                    </motion.div>
-
+                <div className="max-w-4xl mx-auto text-center relative">
                     <motion.div
-                        variants={staggerContainer}
-                        className="grid md:grid-cols-2 lg:grid-cols-3 gap-8"
+                        initial={{ opacity: 0, y: 30 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ duration: 0.6 }}
                     >
-                        {dummyProjects.slice(0, 3).map((project) => (
-                            <motion.div key={project.id} variants={staggerItem}>
-                                <ProjectCard project={project} />
-                            </motion.div>
-                        ))}
-                    </motion.div>
+                        <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+                            Ready to{' '}
+                            <span className="bg-gradient-to-r from-purple-400 to-violet-400 bg-clip-text text-transparent">
+                                Get Started?
+                            </span>
+                        </h2>
+                        <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
+                            {authenticated && userProfile
+                                ? userProfile.role === 'founder'
+                                    ? 'Create your first encrypted pitch and start raising funds securely'
+                                    : 'Discover innovative projects and invest with confidence'
+                                : 'Join ARCfund today and experience the future of private fundraising'}
+                        </p>
 
-                    <motion.div variants={staggerItem} className="text-center mt-12">
-                        <Link href="/browse">
-                            <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                className="px-8 py-3 bg-gradient-to-r from-purple-600 to-violet-600 rounded-lg font-semibold hover:from-purple-700 hover:to-violet-700 transition-all"
-                            >
-                                View All Projects →
-                            </motion.button>
-                        </Link>
+                        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                            {renderHeroButton()}
+                        </div>
                     </motion.div>
                 </div>
-            </motion.section>
+            </section>
+
+            {/* Footer spacer */}
+            <div className="h-20" />
         </div>
     );
 }

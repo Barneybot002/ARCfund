@@ -1,22 +1,72 @@
 /**
  * Create Project Page
  * Form for creating new protected fundraising projects
+ * FOUNDER ONLY - Investors are redirected to browse page
  */
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { usePrivy } from '@privy-io/react-auth';
 import ArciumBadge from '@/components/ArciumBadge';
 import EncryptionBadge from '@/components/EncryptionBadge';
 import { slideUp, slideLeft } from '@/lib/animations';
 import { ProjectCategory } from '@/lib/types';
+import { getUserProfile, UserProfile } from '@/lib/user-storage';
 
 export default function CreateProjectPage() {
     const router = useRouter();
-    const { authenticated, login } = usePrivy();
+    const { ready, authenticated, login } = usePrivy();
+    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        if (!ready) return;
+
+        if (authenticated) {
+            const profile = getUserProfile();
+            setUserProfile(profile);
+        }
+        setIsLoading(false);
+    }, [ready, authenticated]);
+
+    // Check if user is an investor - redirect them
+    if (!isLoading && authenticated && userProfile && userProfile.role === 'investor') {
+        return (
+            <div className="min-h-screen flex items-center justify-center px-4">
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="max-w-md w-full bg-gradient-to-br from-gray-800/60 to-gray-900/60 rounded-2xl border border-gray-700/50 p-10 text-center"
+                >
+                    <div className="w-20 h-20 mx-auto mb-6 bg-violet-500/20 rounded-2xl flex items-center justify-center">
+                        <span className="text-5xl">💰</span>
+                    </div>
+                    <h1 className="text-2xl font-bold text-white mb-3">Investor Account</h1>
+                    <p className="text-gray-400 mb-8">
+                        Creating projects is only available for Founders. As an Investor, you can browse and invest in existing projects.
+                    </p>
+                    <div className="space-y-3">
+                        <Link
+                            href="/browse"
+                            className="block w-full py-3 px-6 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-xl font-bold transition-all hover:scale-[1.02]"
+                        >
+                            Browse Projects
+                        </Link>
+                        <Link
+                            href="/settings"
+                            className="block w-full py-3 px-6 bg-gray-700/50 hover:bg-gray-700 text-gray-300 rounded-xl font-medium transition-all"
+                        >
+                            Switch to Founder in Settings
+                        </Link>
+                    </div>
+                </motion.div>
+            </div>
+        );
+    }
 
     const [formData, setFormData] = useState({
         title: '',
