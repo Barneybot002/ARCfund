@@ -1,6 +1,15 @@
 /**
  * Create Project Page
- * Form for creating new protected fundraising projects
+ * ===================
+ * 
+ * Form for creating new fundraising projects with optional Arcium encryption.
+ * 
+ * FEATURES:
+ * - Role-based access (founders only)
+ * - Optional privacy mode with end-to-end encryption
+ * - Real-time encryption status feedback
+ * - Integration with Arcium MXE (or simulation mode)
+ * 
  * FOUNDER ONLY - Investors are redirected to browse page
  */
 
@@ -9,17 +18,23 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { usePrivy } from '@privy-io/react-auth';
 import ArciumBadge from '@/components/ArciumBadge';
 import EncryptionBadge from '@/components/EncryptionBadge';
 import { slideUp, slideLeft } from '@/lib/animations';
 import { ProjectCategory } from '@/lib/types';
 import { getUserProfile, UserProfile } from '@/lib/user-storage';
+import {
+    createProject,
+    isSimulationMode,
+    getModeIndicator,
+    EncryptionState,
+} from '@/lib/project-storage';
 
 export default function CreateProjectPage() {
     const router = useRouter();
-    const { ready, authenticated, login } = usePrivy();
+    const { ready, authenticated, login, user } = usePrivy();
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -81,6 +96,8 @@ export default function CreateProjectPage() {
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitSuccess, setSubmitSuccess] = useState(false);
+    const [encryptionState, setEncryptionState] = useState<EncryptionState>({ status: 'idle' });
+    const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -93,26 +110,53 @@ export default function CreateProjectPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!authenticated) {
+        if (!authenticated || !user?.wallet?.address) {
             login();
             return;
         }
 
         setIsSubmitting(true);
+        setEncryptionState({ status: 'encrypting', message: 'Preparing...' });
 
-        // Simulate project creation with Arcium encryption
-        setTimeout(() => {
-            console.log('Creating project:', formData);
-            console.log('Privacy mode:', formData.isPrivate ? 'ENCRYPTED via Arcium MXE' : 'PUBLIC');
+        try {
+            const result = await createProject(
+                {
+                    title: formData.title,
+                    description: formData.description,
+                    pitch: formData.pitch,
+                    fundingGoal: parseFloat(formData.fundingGoal) || 0,
+                    category: formData.category,
+                    isPrivate: formData.isPrivate,
+                    tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
+                    timeline: formData.timeline,
+                },
+                user.wallet.address,
+                (state) => setEncryptionState(state)
+            );
 
+            if (result.success && result.project) {
+                setCreatedProjectId(result.project.id);
+                setSubmitSuccess(true);
+
+                // Redirect after success
+                setTimeout(() => {
+                    router.push('/your-projects');
+                }, 2500);
+            } else {
+                setEncryptionState({
+                    status: 'error',
+                    error: result.error || 'Failed to create project'
+                });
+            }
+        } catch (error) {
+            console.error('Project creation error:', error);
+            setEncryptionState({
+                status: 'error',
+                error: error instanceof Error ? error.message : 'Unknown error'
+            });
+        } finally {
             setIsSubmitting(false);
-            setSubmitSuccess(true);
-
-            // Redirect after success
-            setTimeout(() => {
-                router.push('/browse');
-            }, 2000);
-        }, 2000);
+        }
     };
 
     if (!authenticated) {
@@ -152,12 +196,14 @@ export default function CreateProjectPage() {
     }
 
     if (submitSuccess) {
+        const modeInfo = getModeIndicator();
+
         return (
             <div className="min-h-screen flex items-center justify-center px-4">
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="text-center"
+                    className="text-center max-w-lg"
                 >
                     <motion.div
                         initial={{ scale: 0 }}
@@ -170,14 +216,31 @@ export default function CreateProjectPage() {
                         </svg>
                     </motion.div>
                     <h2 className="text-3xl font-bold mb-4 text-white">Project Created!</h2>
-                    <p className="text-gray-400 mb-2">
-                        Your project has been {formData.isPrivate ? 'encrypted with Arcium MXE and ' : ''}published successfully.
+                    <p className="text-gray-400 mb-4">
+                        {formData.isPrivate
+                            ? `Your project pitch has been encrypted ${modeInfo.emoji} and stored securely.`
+                            : 'Your project has been published successfully.'}
                     </p>
-                    <p className="text-sm text-gray-500">Redirecting to browse page...</p>
+
+                    {formData.isPrivate && (
+                        <div className="p-4 bg-purple-900/30 border border-purple-500/30 rounded-xl mb-6">
+                            <div className="flex items-center justify-center gap-2 mb-2">
+                                <span className="text-lg">{modeInfo.emoji}</span>
+                                <span className="font-semibold text-purple-300">{modeInfo.label}</span>
+                            </div>
+                            <p className="text-sm text-gray-400">
+                                {modeInfo.description}
+                            </p>
+                        </div>
+                    )}
+
+                    <p className="text-sm text-gray-500">Redirecting to your projects...</p>
                 </motion.div>
             </div>
         );
     }
+
+    const modeInfo = getModeIndicator();
 
     return (
         <div className="min-h-screen py-20 px-4 sm:px-6 lg:px-8">
@@ -197,6 +260,12 @@ export default function CreateProjectPage() {
                     <p className="text-xl text-gray-400 max-w-2xl mx-auto">
                         Launch your fundraising campaign with optional end-to-end encryption powered by Arcium
                     </p>
+
+                    {/* Mode Indicator */}
+                    <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-gray-800/50 rounded-full border border-gray-700/50">
+                        <span>{modeInfo.emoji}</span>
+                        <span className="text-sm text-gray-400">{modeInfo.label}</span>
+                    </div>
                 </motion.div>
 
                 {/* Form */}
@@ -227,7 +296,7 @@ export default function CreateProjectPage() {
                     {/* Short Description */}
                     <div>
                         <label htmlFor="description" className="block text-sm font-semibold text-gray-300 mb-2">
-                            Short Description *
+                            Short Description * <span className="text-gray-500 font-normal">(always public)</span>
                         </label>
                         <textarea
                             id="description"
@@ -237,7 +306,7 @@ export default function CreateProjectPage() {
                             onChange={handleChange}
                             rows={3}
                             className="w-full px-4 py-3 bg-gray-900/50 border border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-white resize-none"
-                            placeholder="Brief description shown on project card"
+                            placeholder="Brief description shown on project card (this is visible to everyone)"
                         />
                     </div>
 
@@ -245,6 +314,11 @@ export default function CreateProjectPage() {
                     <div>
                         <label htmlFor="pitch" className="block text-sm font-semibold text-gray-300 mb-2">
                             Full Pitch *
+                            {formData.isPrivate && (
+                                <span className="text-purple-400 font-normal ml-2">
+                                    🔐 Will be encrypted
+                                </span>
+                            )}
                         </label>
                         <textarea
                             id="pitch"
@@ -253,9 +327,18 @@ export default function CreateProjectPage() {
                             value={formData.pitch}
                             onChange={handleChange}
                             rows={6}
-                            className="w-full px-4 py-3 bg-gray-900/50 border border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-white resize-none"
-                            placeholder="Detailed project pitch (will be encrypted if private mode is enabled)"
+                            className={`w-full px-4 py-3 bg-gray-900/50 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-white resize-none ${formData.isPrivate ? 'border-purple-500/50' : 'border-gray-700'
+                                }`}
+                            placeholder={formData.isPrivate
+                                ? "Detailed project pitch (will be encrypted and only visible to approved investors)"
+                                : "Detailed project pitch (will be visible to everyone)"
+                            }
                         />
+                        {formData.isPrivate && (
+                            <p className="mt-2 text-sm text-purple-400/70">
+                                ℹ️ This content will be encrypted. Only approved investors can view it.
+                            </p>
+                        )}
                     </div>
 
                     {/* Funding Goal & Category */}
@@ -330,7 +413,10 @@ export default function CreateProjectPage() {
                     </div>
 
                     {/* Privacy Toggle */}
-                    <div className="p-6 bg-purple-900/20 border-2 border-purple-500/30 rounded-xl">
+                    <div className={`p-6 rounded-xl border-2 transition-all ${formData.isPrivate
+                            ? 'bg-purple-900/30 border-purple-500/50'
+                            : 'bg-gray-800/50 border-gray-700/50'
+                        }`}>
                         <div className="flex items-start gap-4">
                             <input
                                 type="checkbox"
@@ -346,16 +432,80 @@ export default function CreateProjectPage() {
                                     {formData.isPrivate && <EncryptionBadge isEncrypted={true} variant="compact" showTooltip={false} />}
                                 </label>
                                 <p className="text-sm text-gray-400 mt-1">
-                                    Enable end-to-end encryption via Arcium MXE. Your pitch will be encrypted and only approved investors can view it.
+                                    Enable end-to-end encryption via {modeInfo.label}. Your pitch will be encrypted and only approved investors can view it.
                                 </p>
+
                                 {formData.isPrivate && (
-                                    <div className="mt-4">
+                                    <motion.div
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        className="mt-4 space-y-3"
+                                    >
                                         <ArciumBadge />
-                                    </div>
+
+                                        <div className="p-3 bg-gray-900/50 rounded-lg border border-gray-700/50">
+                                            <h4 className="font-medium text-white text-sm mb-2">How it works:</h4>
+                                            <ul className="text-xs text-gray-400 space-y-1">
+                                                <li>• Your pitch is encrypted using {isSimulationMode() ? 'AES-256-GCM' : 'Arcium MXE'}</li>
+                                                <li>• Investors can only see the public description</li>
+                                                <li>• Approved investors can decrypt and view your full pitch</li>
+                                                <li>• You control who gets access</li>
+                                            </ul>
+                                        </div>
+                                    </motion.div>
                                 )}
                             </div>
                         </div>
                     </div>
+
+                    {/* Encryption Status */}
+                    <AnimatePresence>
+                        {encryptionState.status !== 'idle' && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className={`p-4 rounded-lg border ${encryptionState.status === 'error'
+                                        ? 'bg-red-900/20 border-red-500/30 text-red-400'
+                                        : encryptionState.status === 'encrypted'
+                                            ? 'bg-green-900/20 border-green-500/30 text-green-400'
+                                            : 'bg-purple-900/20 border-purple-500/30 text-purple-400'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    {encryptionState.status === 'encrypting' && (
+                                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                            <path
+                                                className="opacity-75"
+                                                fill="currentColor"
+                                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                            />
+                                        </svg>
+                                    )}
+                                    {encryptionState.status === 'encrypted' && (
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    )}
+                                    {encryptionState.status === 'error' && (
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    )}
+                                    <span>{encryptionState.message || encryptionState.error}</span>
+                                </div>
+                                {encryptionState.progress !== undefined && (
+                                    <div className="mt-2 w-full bg-gray-700 rounded-full h-1">
+                                        <div
+                                            className="bg-purple-500 h-1 rounded-full transition-all"
+                                            style={{ width: `${encryptionState.progress}%` }}
+                                        />
+                                    </div>
+                                )}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
                     {/* Submit Button */}
                     <button
@@ -387,7 +537,7 @@ export default function CreateProjectPage() {
                                         />
                                     </svg>
                                 )}
-                                Create Project
+                                {formData.isPrivate ? 'Encrypt & Create Project' : 'Create Project'}
                             </>
                         )}
                     </button>

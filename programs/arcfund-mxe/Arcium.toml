@@ -1,0 +1,37 @@
+# ARCfund MXE Program
+# =====================
+# 
+# Arcium MXE program configuration for encrypted project pitches.
+# Run these commands in WSL2/Linux to set up and deploy.
+# 
+# Documentation: https://docs.arcium.com/
+
+[arcium]
+name = "arcfund_mxe"
+version = "0.1.0"
+
+# Cluster configuration
+[cluster]
+# Use offset 0 for testnet/devnet
+offset = 0
+# Recovery set size - minimum MPC nodes needed
+recovery_set_size = 3
+
+# Dependencies
+[dependencies]
+arcis = "0.1"
+anchor-lang = "0.32"
+arcium-anchor = "0.1"
+
+# Encrypted instructions
+[[encrypted_ix]]
+name = "encrypt_project"
+path = "encrypted-ixs/encrypt_project.rs"
+
+[[encrypted_ix]]
+name = "verify_access"
+path = "encrypted-ixs/verify_access.rs"
+
+# Build settings
+[build]
+target = "bpfel-unknown-unknown"

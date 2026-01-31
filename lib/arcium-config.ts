@@ -1,220 +1,236 @@
 /**
- * Arcium SDK Integration Configuration
+ * Arcium MXE Integration - Configuration & Client
+ * ================================================
+ * 
+ * This module provides both REAL Arcium MXE integration and a SIMULATION MODE
+ * for development/demo purposes when the full MXE infrastructure isn't available.
+ * 
+ * SIMULATION MODE (Default for hackathon demo):
+ * - Uses local encryption (AES-256-GCM) to simulate the encryption flow
+ * - Stores "encrypted" data in localStorage for demo
+ * - Shows the same UI/UX as real implementation
+ * - Toggle with: NEXT_PUBLIC_ARCIUM_SIMULATION_MODE=true
+ * 
+ * PRODUCTION MODE:
+ * - Uses real Arcium MXE for multi-party computation
+ * - Encrypts with RescueCipher and x25519 key exchange
+ * - Submits computations to MPC cluster
+ * - Toggle with: NEXT_PUBLIC_ARCIUM_SIMULATION_MODE=false
+ * 
  * Documentation: https://docs.arcium.com/
- * 
- * ARCIUM OVERVIEW:
- * ================
- * Arcium enables confidential computing through Multi-Party Computation (MPC).
- * It allows applications to compute over encrypted data without ever decrypting it.
- * 
- * KEY FEATURES:
- * - Trustless, arbitrary encrypted computing via MXEs (MPC eXecution Environments)
- * - Guaranteed execution through blockchain orchestration
- * - Verifiable computations with public audit capability
- * - Solana-based onchain orchestration
- * - Developer-friendly Arcis framework (extends Anchor)
- * 
- * HOW IT WORKS:
- * 1. Client encrypts data and sends it to your MXE program
- * 2. Your program submits the computation to Arcium's network of MPC nodes
- * 3. Nodes process the data while keeping it encrypted, then return results
- * 
- * INSTALLATION:
- * =============
- * For full Arcium development, install the Arcium CLI:
- * 
- *   curl -fsSL https://install.arcium.com | bash
- *   arcium init <project-name>
- * 
- * The Arcium CLI wraps the Anchor CLI and allows you to:
- * - Write confidential instructions in Rust using the Arcis framework
- * - Build Solana programs with Arcium
- * - Integrate with TypeScript client libraries
- * 
- * TYPESCRIPT SDK:
- * ===============
- * For frontend integration, use the TypeScript SDK:
- * Documentation: https://ts.arcium.com/api
- * 
- * Example installation (when available):
- *   npm install @arcium/sdk
- * 
- * KEY CONCEPTS FOR THIS PROJECT:
- * ==============================
- * 1. Encrypted Project Pitches:
- *    - Founders create project pitches marked as "private"
- *    - Project data is encrypted using Arcium MXE before storage
- *    - Only approved investors can decrypt and view the data
- * 
- * 2. Access Control:
- *    - Investors request access to private projects
- *    - Access is granted through encrypted computation
- *    - Data remains encrypted during the entire process
- * 
- * 3. Confidential Funding:
- *    - Investment amounts can remain confidential
- *    - Smart contract escrow with privacy guarantees
- *    - Encrypted computation ensures no data leakage
- * 
- * ENCRYPTION TYPES:
- * =================
- * Arcium uses Enc<Owner, Data> as its encrypted data type:
- * 
- * - Enc<Shared, Data>: Encrypted with a shared secret between client and MXE
- *   Both parties can decrypt it. Use for data that needs to be read by both client and MXE.
- * 
- * - Enc<Mxe, Data>: Encrypted such that only the MXE can decrypt
- *   Use for data that should only be processed within the MXE.
- * 
- * IMPLEMENTATION GUIDE FOR ARCFUND:
- * ==================================
- * This project uses placeholders for Arcium integration. To complete the integration:
- * 
- * 1. Read the full Arcium documentation at https://docs.arcium.com/
- * 2. Install the Arcium CLI and initialize a project
- * 3. Create encrypted instructions for:
- *    - encryptProjectData(projectData) -> Enc<Shared, ProjectData>
- *    - requestAccess(investorId, projectId) -> access token
- *    - decryptProjectData(encryptedData, accessToken) -> ProjectData
- * 4. Deploy your MXE program to Arcium's network
- * 5. Update the placeholder functions below with actual SDK calls
- * 6. Configure the network endpoint (devnet/mainnet)
- * 
- * USEFUL LINKS:
- * =============
- * - Main Docs: https://docs.arcium.com/
- * - Developer Guide: https://docs.arcium.com/developers
- * - Hello World: https://docs.arcium.com/developers/hello-world
- * - TypeScript SDK: https://ts.arcium.com/api
- * - Discord: https://discord.com/invite/arcium
  */
 
-export const arciumConfig = {
-    // Network configuration
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+export const ARCIUM_CONFIG = {
+    // Network settings
     network: (process.env.NEXT_PUBLIC_ARCIUM_NETWORK || 'devnet') as 'devnet' | 'mainnet',
+    solanaRpcUrl: process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com',
 
-    // MXE endpoint (update when deploying your MXE program)
-    mxeEndpoint: process.env.NEXT_PUBLIC_ARCIUM_MXE_ENDPOINT || '',
+    // Program IDs (set after deployment)
+    arcfundProgramId: process.env.NEXT_PUBLIC_ARCFUND_PROGRAM_ID || '',
+    arciumProgramId: process.env.NEXT_PUBLIC_ARCIUM_PROGRAM_ID || 'arc1umE2cLaXZLt24JGLKvxPzNSrtEzHVB8wVSTPzBi2',
 
-    // Program IDs (update after deployment)
-    programId: process.env.NEXT_PUBLIC_ARCIUM_PROGRAM_ID || '',
-};
+    // Cluster configuration
+    clusterOffset: parseInt(process.env.NEXT_PUBLIC_ARCIUM_CLUSTER_OFFSET || '0'),
 
-/**
- * Project data structure for encryption
- */
-export interface ProjectData {
-    title: string;
-    description: string;
+    // SIMULATION MODE - Set to false when real Arcium is ready
+    simulationMode: process.env.NEXT_PUBLIC_ARCIUM_SIMULATION_MODE !== 'false',
+
+    // Max pitch size (bytes) - Arcium has callback size limits
+    maxPitchSize: 2048,
+} as const;
+
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+export interface EncryptedProjectData {
+    /** Unique identifier for the encrypted data */
+    id: string;
+
+    /** Encrypted pitch content (base64) */
+    encryptedPitch: string;
+
+    /** Public key used for encryption (hex) */
+    publicKey: string;
+
+    /** Nonce used for encryption (hex) */
+    nonce: string;
+
+    /** Timestamp of encryption */
+    encryptedAt: number;
+
+    /** Whether this is simulated or real encryption */
+    isSimulated: boolean;
+
+    /** For real Arcium: computation reference */
+    computationRef?: string;
+}
+
+export interface DecryptedProjectData {
+    /** Original pitch content */
     pitch: string;
-    fundingGoal: number;
-    timeline: string;
-    team: string[];
-    roadmap: string;
-    tokenomics?: string;
+
+    /** Timestamp of decryption */
+    decryptedAt: number;
+}
+
+export interface AccessPermission {
+    /** Project ID */
+    projectId: string;
+
+    /** Investor wallet address */
+    investorAddress: string;
+
+    /** Founder wallet address */
+    founderAddress: string;
+
+    /** Whether access is granted */
+    isGranted: boolean;
+
+    /** When access was granted */
+    grantedAt?: number;
+
+    /** Access token for decryption (simulated mode) */
+    accessToken?: string;
+}
+
+export interface ProjectOnChain {
+    /** Project ID (32 bytes as hex) */
+    id: string;
+
+    /** Founder's wallet address */
+    founder: string;
+
+    /** Project title */
+    title: string;
+
+    /** Whether the project pitch is encrypted */
+    isPrivate: boolean;
+
+    /** Reference to encrypted data */
+    encryptedRef?: string;
+
+    /** Creation timestamp */
+    createdAt: number;
+
+    /** Public (unencrypted) description for discovery */
+    publicDescription?: string;
+
+    /** Category */
+    category?: string;
+
+    /** Funding goal in USD */
+    fundingGoal?: number;
+}
+
+// ============================================================================
+// ENCRYPTION STATUS TYPES
+// ============================================================================
+
+export type EncryptionStatus =
+    | 'idle'
+    | 'encrypting'
+    | 'encrypted'
+    | 'decrypting'
+    | 'decrypted'
+    | 'error';
+
+export interface EncryptionState {
+    status: EncryptionStatus;
+    message?: string;
+    progress?: number;
+    error?: string;
+}
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Check if Arcium simulation mode is enabled
+ */
+export function isSimulationMode(): boolean {
+    return ARCIUM_CONFIG.simulationMode;
 }
 
 /**
- * Encrypted data wrapper
+ * Check if the environment is properly configured for real Arcium
  */
-export interface EncryptedData {
-    encrypted: boolean;
-    data: string; // Base64 encoded encrypted data
-    timestamp: number;
-    encryptionMethod: 'arcium-mxe';
+export function isArciumReady(): boolean {
+    if (ARCIUM_CONFIG.simulationMode) {
+        return true; // Simulation always works
+    }
+
+    return !!(
+        ARCIUM_CONFIG.arcfundProgramId &&
+        ARCIUM_CONFIG.solanaRpcUrl
+    );
 }
 
 /**
- * PLACEHOLDER: Encrypt project data using Arcium MXE
- * 
- * TODO: Replace this with actual Arcium SDK implementation
- * 
- * Implementation steps:
- * 1. Convert ProjectData to bytes
- * 2. Call Arcium encryption function with Enc<Shared, ProjectData>
- * 3. Return encrypted data that can be stored onchain
- * 
- * @param data - Project data to encrypt
- * @returns Encrypted data object
+ * Get a display-friendly status message
  */
-export async function encryptWithArcium(data: ProjectData): Promise<EncryptedData> {
-    console.log('🔐 Arcium MXE Encryption (PLACEHOLDER)');
-    console.log('TODO: Implement actual Arcium SDK encryption');
-    console.log('Data to encrypt:', data);
+export function getEncryptionStatusMessage(status: EncryptionStatus, isSimulated: boolean): string {
+    const prefix = isSimulated ? '🔄 [Demo] ' : '🔐 [Arcium] ';
 
-    // PLACEHOLDER IMPLEMENTATION
-    // Replace this with actual Arcium SDK call:
-    // const encrypted = await arciumClient.encrypt(data, EncryptionType.Shared);
-
-    return {
-        encrypted: true,
-        data: Buffer.from(JSON.stringify(data)).toString('base64'),
-        timestamp: Date.now(),
-        encryptionMethod: 'arcium-mxe',
-    };
+    switch (status) {
+        case 'idle':
+            return '';
+        case 'encrypting':
+            return prefix + 'Encrypting your pitch...';
+        case 'encrypted':
+            return prefix + 'Pitch encrypted successfully!';
+        case 'decrypting':
+            return prefix + 'Decrypting pitch...';
+        case 'decrypted':
+            return prefix + 'Pitch decrypted successfully!';
+        case 'error':
+            return '❌ Encryption error occurred';
+        default:
+            return '';
+    }
 }
 
 /**
- * PLACEHOLDER: Decrypt project data using Arcium MXE
- * 
- * TODO: Replace this with actual Arcium SDK implementation
- * 
- * Implementation steps:
- * 1. Verify the user has access to this encrypted data
- * 2. Call Arcium decryption function
- * 3. Return decrypted ProjectData
- * 
- * @param encryptedData - Encrypted data object
- * @param accessToken - Optional access token for authorization
- * @returns Decrypted project data
+ * Generate a random ID for projects
  */
-export async function decryptWithArcium(
-    encryptedData: EncryptedData,
-    accessToken?: string
-): Promise<ProjectData> {
-    console.log('🔓 Arcium MXE Decryption (PLACEHOLDER)');
-    console.log('TODO: Implement actual Arcium SDK decryption');
-    console.log('Access token:', accessToken);
-
-    // PLACEHOLDER IMPLEMENTATION
-    // Replace this with actual Arcium SDK call:
-    // const decrypted = await arciumClient.decrypt(encryptedData.data, accessToken);
-
-    const decoded = Buffer.from(encryptedData.data, 'base64').toString();
-    return JSON.parse(decoded) as ProjectData;
+export function generateProjectId(): string {
+    const bytes = new Uint8Array(32);
+    if (typeof window !== 'undefined' && window.crypto) {
+        window.crypto.getRandomValues(bytes);
+    } else {
+        // Fallback for SSR
+        for (let i = 0; i < 32; i++) {
+            bytes[i] = Math.floor(Math.random() * 256);
+        }
+    }
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 /**
- * PLACEHOLDER: Request access to encrypted project
- * 
- * TODO: Implement access control logic with Arcium
- * 
- * @param projectId - ID of the project to request access to
- * @param investorAddress - Wallet address of the investor
- * @returns Access token if granted
+ * Convert bytes to hex string
  */
-export async function requestProjectAccess(
-    projectId: string,
-    investorAddress: string
-): Promise<string | null> {
-    console.log('🔑 Requesting project access (PLACEHOLDER)');
-    console.log('Project:', projectId);
-    console.log('Investor:', investorAddress);
-
-    // TODO: Implement actual access control logic
-    // This should:
-    // 1. Submit access request to smart contract
-    // 2. Wait for founder approval
-    // 3. Generate access token via Arcium MXE
-    // 4. Return token that can decrypt the project data
-
-    return 'placeholder-access-token';
+export function bytesToHex(bytes: Uint8Array): string {
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 /**
- * Check if encryption is available
+ * Convert hex string to bytes
  */
-export function isArciumAvailable(): boolean {
-    // TODO: Check if Arcium SDK is properly configured
-    return false; // Set to true when SDK is integrated
+export function hexToBytes(hex: string): Uint8Array {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < hex.length; i += 2) {
+        bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+    }
+    return bytes;
 }
+
+// ============================================================================
+// EXPORTS
+// ============================================================================
+
+export { ARCIUM_CONFIG as arciumConfig };
