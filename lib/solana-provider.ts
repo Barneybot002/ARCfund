@@ -26,11 +26,30 @@ class InjectedWallet {
     async ensureConnected(): Promise<void> {
         if (!this.provider) return;
         try {
-            if (!this.provider.publicKey && typeof this.provider.connect === 'function') {
-                await this.provider.connect();
-            }
+            // If provider already exposes a publicKey, use it
             if (this.provider.publicKey) {
                 this.publicKey = new PublicKey(this.provider.publicKey.toString());
+                return;
+            }
+
+            // Try connecting; some wallets support connect() and some emit events
+            if (typeof this.provider.connect === 'function') {
+                try {
+                    const res = await this.provider.connect();
+                    // Phantom returns { publicKey }
+                    if (res && res.publicKey) {
+                        this.publicKey = new PublicKey(res.publicKey.toString());
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('provider.connect() threw:', e);
+                }
+            }
+
+            // As a fallback, try reading provider.publicKey again (some wallets update it asynchronously)
+            if (this.provider.publicKey) {
+                this.publicKey = new PublicKey(this.provider.publicKey.toString());
+                return;
             }
         } catch (err) {
             console.warn('Injected wallet connect failed:', err);
@@ -38,7 +57,7 @@ class InjectedWallet {
     }
 
     signTransaction(tx: any) {
-        if (!this.provider || typeof this.provider.signTransaction !== 'function') throw new Error('Wallet signing unsupported');
+        if (!this.provider || typeof this.provider.signTransaction !== 'function') return Promise.reject(new Error('Wallet signing unsupported'));
         return this.provider.signTransaction(tx);
     }
 
@@ -92,6 +111,7 @@ export function useSolanaProvider() {
                         hasPublicKey: !!providerObj.publicKey,
                     });
 
+
                     // Attempt to actively connect so Phantom will prompt if needed
                     try {
                         console.debug('[solana-provider] calling ensureConnected on injected wallet');
@@ -101,15 +121,19 @@ export function useSolanaProvider() {
                         console.warn('[solana-provider] ensureConnected for injected wallet failed:', err);
                     }
 
-                    const anchorProvider = new AnchorProvider(connection, wallet as any, {
-                        preflightCommitment: 'processed',
-                        commitment: 'processed',
-                    });
+                    if (!wallet.publicKey) {
+                        console.error('[solana-provider] injected wallet did not expose publicKey after connect; aborting AnchorProvider creation');
+                    } else {
+                        const anchorProvider = new AnchorProvider(connection, wallet as any, {
+                            preflightCommitment: 'processed',
+                            commitment: 'processed',
+                        });
 
-                    if (!mounted) return;
-                    setProvider(anchorProvider);
+                        if (!mounted) return;
+                        setProvider(anchorProvider);
 
-                    console.info('[solana-provider] AnchorProvider created with injected wallet');
+                        console.info('[solana-provider] AnchorProvider created with injected wallet');
+                    }
 
                     // project-storage initialization is not required here
                 } else {
