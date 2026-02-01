@@ -25,41 +25,62 @@ class InjectedWallet {
 
     async ensureConnected(): Promise<void> {
         if (!this.provider) return;
-        try {
-            // If provider already exposes a publicKey, use it
-            if (this.provider.publicKey) {
-                this.publicKey = new PublicKey(this.provider.publicKey.toString());
-                return;
-            }
+                if (injected) {
+                    // Use injected wallet (Phantom, etc.) when available
+                    // @ts-ignore
+                    const providerObj = window.solana;
+                    // @ts-ignore
+                    const pub = providerObj.publicKey?.toString?.() ?? null;
+                    const wallet = new InjectedWallet(providerObj, pub ?? undefined);
 
-            // Try connecting; some wallets support connect() and some emit events
-            if (typeof this.provider.connect === 'function') {
-                try {
-                    const res = await this.provider.connect();
-                    // Phantom returns { publicKey }
-                    if (res && res.publicKey) {
-                        this.publicKey = new PublicKey(res.publicKey.toString());
-                        return;
+                    console.debug('[solana-provider] detected injected wallet:', {
+                        isPhantom: providerObj.isPhantom ?? false,
+                        hasPublicKey: !!providerObj.publicKey,
+                    });
+
+                    // Do NOT call connect() automatically (may be blocked without user gesture).
+                    // Instead, listen for the provider's 'connect' event and create AnchorProvider then.
+                    const createProviderIfConnected = () => {
+                        try {
+                            const currentPub = providerObj.publicKey?.toString?.();
+                            if (!currentPub) return;
+                            const w = new InjectedWallet(providerObj, currentPub);
+                            const anchorProvider = new AnchorProvider(connection, w as any, {
+                                preflightCommitment: 'processed',
+                                commitment: 'processed',
+                            });
+                            if (!mounted) return;
+                            setProvider(anchorProvider);
+                            console.info('[solana-provider] AnchorProvider created after injected wallet connect');
+                        } catch (err) {
+                            console.error('[solana-provider] failed creating AnchorProvider after connect:', err);
+                        }
+                    };
+
+                    // If already connected, create provider immediately
+                    createProviderIfConnected();
+
+                    // Attach event listener so when user triggers connect (user gesture), provider is created
+                    try {
+                        if (typeof providerObj.on === 'function') {
+                            providerObj.on('connect', createProviderIfConnected);
+                        }
+                    } catch (e) {
+                        console.warn('[solana-provider] could not attach connect listener to injected provider', e);
                     }
-                } catch (e) {
-                    console.warn('provider.connect() threw:', e);
-                }
-            }
 
-            // As a fallback, try reading provider.publicKey again (some wallets update it asynchronously)
-            if (this.provider.publicKey) {
-                this.publicKey = new PublicKey(this.provider.publicKey.toString());
-                return;
-            }
-        } catch (err) {
-            console.warn('Injected wallet connect failed:', err);
-        }
-    }
-
-    signTransaction(tx: any) {
-        if (!this.provider || typeof this.provider.signTransaction !== 'function') return Promise.reject(new Error('Wallet signing unsupported'));
-        return this.provider.signTransaction(tx);
-    }
+                    // Expose a helper to trigger the wallet connection from a user gesture
+                    (window as any).__arcfund_triggerInjectedConnect = async () => {
+                        try {
+                            if (typeof providerObj.connect === 'function') {
+                                return await providerObj.connect();
+                            }
+                            throw new Error('Injected provider has no connect()');
+                        } catch (e) {
+                            console.error('[solana-provider] triggerInjectedConnect failed:', e);
+                            throw e;
+                        }
+                    };
 
     signAllTransactions(txs: any[]) {
         if (!this.provider) return Promise.reject(new Error('signAllTransactions not supported'));
