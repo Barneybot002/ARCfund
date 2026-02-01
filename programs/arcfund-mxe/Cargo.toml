@@ -1,22 +1,16 @@
 [package]
 name = "arcfund-mxe"
 version = "0.1.0"
-description = "ARCfund MXE Program for encrypted project pitches using Arcium confidential computing"
 edition = "2021"
+
+[dependencies]
+anchor-lang = "0.30"
+anchor-spl = "0.30"
 
 [lib]
 crate-type = ["cdylib", "lib"]
 name = "arcfund_mxe"
+path = "src/lib.rs"
 
-[features]
-no-entrypoint = []
-cpi = ["no-entrypoint"]
-default = []
-
-[dependencies]
-anchor-lang = "0.32.0"
-arcium-anchor = "0.1.0"
-arcis = "0.1.0"
-
-[dev-dependencies]
-anchor-client = "0.32.0"
+[profile.release]
+overflow-checks = true

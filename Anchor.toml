@@ -1,0 +1,24 @@
+[toolchain]
+anchor_version = "0.30.0"
+
+[build]
+shell = "/bin/bash"
+
+[build.development]
+compcap_disabled = false
+
+[features]
+seeds = true
+skip-lint = false
+
+[registry]
+url = "https://api.github.com/repos/coral-xyz/anchor/releases/download"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "cargo test --lib"
+
+[dependencies]
